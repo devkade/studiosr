@@ -32,6 +32,7 @@ class Trainer:
         model: nn.Module,
         train_dataset: Dataset,
         evaluator: Evaluator = None,
+        optimizer: torch.optim = None,
         batch_size: int = 32,
         num_workers: int = 4,
         learning_rate: float = 0.0002,
@@ -46,6 +47,7 @@ class Trainer:
         ckpt_path: str = "checkpoints",
         bfloat16: bool = True,
         seed: int = 0,
+        log_iters: int = 0,
     ):
 
         self.model = model
@@ -62,16 +64,19 @@ class Trainer:
         self.bfloat16 = bfloat16 if self.device == "cuda" and torch.cuda.is_bf16_supported() else False
         self.seed = seed
 
-        self.optimizer = torch.optim.Adam(
-            model.parameters(),
-            lr=learning_rate,
-            betas=(beta1, beta2),
-            weight_decay=weight_decay,
-        )
+        if optimizer is not None:
+            self.optimizer = optimizer
+        else:
+            self.optimizer = torch.optim.Adam(
+                model.parameters(),
+                lr=learning_rate,
+                betas=(beta1, beta2),
+                weight_decay=weight_decay,
+            )
         self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.optimizer, milestones=milestones, gamma=gamma)
         self.criterion = loss_function
 
-        self.iter_num = 0
+        self.iter_num = log_iters
         self.iter_time = 0.0
         self.iter_dt = 0.0
 
@@ -125,7 +130,6 @@ class Trainer:
             os.makedirs(self.ckpt_path, exist_ok=True)
 
         model = model.train()
-        self.iter_num = 0
         while True:
             self.iter_num += 1
             if self.iter_num > self.max_iters:
@@ -151,7 +155,12 @@ class Trainer:
                     raw_model = raw_model.train()
                     print(f" Iterations = {self.iter_num:<8}  PSNR: {psnr:6.3f} SSIM: {ssim:6.4f}")
                 torch.save(
-                    raw_model.state_dict(),
+                    {
+                        "model" : raw_model.__class__.__name__,
+                        "iter_num" : self.iter_num,
+                        "model_state_dict" : raw_model.state_dict(),
+                        "optimizer_state_dict" : self.optimizer.state_dict()
+                    },
                     os.path.join(self.ckpt_path, "ckpt_%d.pth" % (self.iter_num)),
                 )
 
