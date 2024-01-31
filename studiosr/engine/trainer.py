@@ -32,7 +32,7 @@ class Trainer:
         model: nn.Module,
         train_dataset: Dataset,
         evaluator: Evaluator = None,
-        optimizer: torch.optim = None,
+        optimizer: torch.optim.Optimizer.state_dict = None,
         batch_size: int = 32,
         num_workers: int = 4,
         learning_rate: float = 0.0002,
@@ -64,15 +64,15 @@ class Trainer:
         self.bfloat16 = bfloat16 if self.device == "cuda" and torch.cuda.is_bf16_supported() else False
         self.seed = seed
 
+        self.optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=learning_rate,
+            betas=(beta1, beta2),
+            weight_decay=weight_decay,
+        )
         if optimizer is not None:
-            self.optimizer = optimizer
-        else:
-            self.optimizer = torch.optim.Adam(
-                model.parameters(),
-                lr=learning_rate,
-                betas=(beta1, beta2),
-                weight_decay=weight_decay,
-            )
+            self.optimizer = optimizer.load_state_dict(optimizer)
+
         self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.optimizer, milestones=milestones, gamma=gamma)
         self.criterion = loss_function
 
